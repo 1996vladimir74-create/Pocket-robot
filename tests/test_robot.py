@@ -4,16 +4,14 @@ import unittest
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIRMWARE_DIR = os.path.join(PROJECT_ROOT, "firmware")
-
 if FIRMWARE_DIR not in sys.path:
     sys.path.insert(0, FIRMWARE_DIR)
 
 from robot import Robot
 from emotion import EmotionController
-
+from face import FaceRenderer
 
 class TestRobot(unittest.TestCase):
-
     def setUp(self):
         self.robot = Robot()
 
@@ -64,23 +62,9 @@ class TestRobot(unittest.TestCase):
         self.robot.set_wifi(True)
         self.robot.set_temperature(23.5)
         self.robot.set_message("Hi")
-
-        self.assertEqual(
-            self.robot.status(),
-            {
-                "mood": "surprised",
-                "intensity": 0.9,
-                "state": "listening",
-                "volume": 80,
-                "temperature": 23.5,
-                "wifi": True,
-                "message": "Hi",
-            },
-        )
-
+        self.assertEqual(self.robot.status(), {"mood": "surprised", "intensity": 0.9, "state": "listening", "volume": 80, "temperature": 23.5, "wifi": True, "message": "Hi"})
 
 class TestEmotionController(unittest.TestCase):
-
     def setUp(self):
         self.emotion = EmotionController()
 
@@ -118,11 +102,42 @@ class TestEmotionController(unittest.TestCase):
         self.emotion.handle_event("sleep")
         self.assertEqual(self.emotion.emotion, "sleepy")
         self.assertEqual(self.emotion.state, "sleeping")
-
         self.emotion.handle_event("wake", now_ms=1000)
         self.assertEqual(self.emotion.emotion, "happy")
         self.assertEqual(self.emotion.state, "idle")
 
+class TestFaceRenderer(unittest.TestCase):
+    def setUp(self):
+        self.face = FaceRenderer()
+
+    def test_default_geometry(self):
+        self.assertEqual(self.face.width, 240)
+        self.assertEqual(self.face.height, 280)
+        self.assertGreater(len(self.face.render("neutral", 0.5)), 0)
+
+    def test_all_emotions_render(self):
+        for emotion in EmotionController.EMOTIONS:
+            commands = self.face.render(emotion, 0.5)
+            self.assertGreater(len(commands), 0)
+            self.assertEqual(commands[0]["type"], "fill_rect")
+
+    def test_intensity_changes_geometry(self):
+        normal = self.face.render("happy", 0.2)
+        strong = self.face.render("happy", 1.0)
+        self.assertNotEqual(normal, strong)
+
+    def test_animation_frame_changes_output(self):
+        open_eyes = self.face.render("neutral", 0.5, frame=10)
+        blink = self.face.render("neutral", 0.5, frame=0)
+        self.assertNotEqual(open_eyes, blink)
+
+    def test_invalid_emotion(self):
+        with self.assertRaises(ValueError):
+            self.face.render("unknown", 0.5)
+
+    def test_invalid_intensity(self):
+        with self.assertRaises(ValueError):
+            self.face.render("happy", 1.1)
 
 if __name__ == "__main__":
     unittest.main()
