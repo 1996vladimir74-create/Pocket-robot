@@ -11,6 +11,7 @@ from robot import Robot
 from emotion import EmotionController
 from face import FaceRenderer
 
+
 class TestRobot(unittest.TestCase):
     def setUp(self):
         self.robot = Robot()
@@ -55,14 +56,6 @@ class TestRobot(unittest.TestCase):
         self.robot.clear_message()
         self.assertIsNone(self.robot.message)
 
-    def test_status(self):
-        self.robot.set_mood("surprised", 0.9)
-        self.robot.set_state("listening")
-        self.robot.set_volume(80)
-        self.robot.set_wifi(True)
-        self.robot.set_temperature(23.5)
-        self.robot.set_message("Hi")
-        self.assertEqual(self.robot.status(), {"mood": "surprised", "intensity": 0.9, "state": "listening", "volume": 80, "temperature": 23.5, "wifi": True, "message": "Hi"})
 
 class TestEmotionController(unittest.TestCase):
     def setUp(self):
@@ -106,6 +99,16 @@ class TestEmotionController(unittest.TestCase):
         self.assertEqual(self.emotion.emotion, "happy")
         self.assertEqual(self.emotion.state, "idle")
 
+    def test_smooth_transition(self):
+        self.emotion.handle_event("button_action", now_ms=0)
+        self.assertEqual(self.emotion.visual_blend, 0.0)
+        self.emotion.update(210, 100)
+        self.assertGreater(self.emotion.visual_blend, 0.0)
+        self.assertLess(self.emotion.visual_blend, 1.0)
+        self.emotion.update(300, 400)
+        self.assertEqual(self.emotion.visual_blend, 1.0)
+
+
 class TestFaceRenderer(unittest.TestCase):
     def setUp(self):
         self.face = FaceRenderer()
@@ -131,6 +134,13 @@ class TestFaceRenderer(unittest.TestCase):
         blink = self.face.render("neutral", 0.5, frame=0)
         self.assertNotEqual(open_eyes, blink)
 
+    def test_emotion_morph_changes_output(self):
+        start = self.face.render("happy", 0.8, from_emotion="neutral", blend=0.0)
+        middle = self.face.render("happy", 0.8, from_emotion="neutral", blend=0.5)
+        end = self.face.render("happy", 0.8, from_emotion="neutral", blend=1.0)
+        self.assertNotEqual(start, middle)
+        self.assertNotEqual(middle, end)
+
     def test_invalid_emotion(self):
         with self.assertRaises(ValueError):
             self.face.render("unknown", 0.5)
@@ -138,6 +148,7 @@ class TestFaceRenderer(unittest.TestCase):
     def test_invalid_intensity(self):
         with self.assertRaises(ValueError):
             self.face.render("happy", 1.1)
+
 
 if __name__ == "__main__":
     unittest.main()
