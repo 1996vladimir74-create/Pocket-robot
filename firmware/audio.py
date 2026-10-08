@@ -1,14 +1,17 @@
-"""INMP441 input and simple local sound-event classifier.
+"""MAX4466 analog microphone input and lightweight sound classifier.
 
-V1 intentionally uses lightweight signal features only. It can reliably
-react to silence and loud sounds, and uses zero-crossing rate as a rough
-speech/noise/music hint. It is NOT speech recognition and should be
-calibrated on the real microphone before treating music classification as
-accurate.
+V1 uses the MAX4466 microphone amplifier connected directly to an ADC1 pin.
+The MAX4466 output is DC-biased around VCC/2, so the analyzer removes the
+measured DC offset before calculating RMS and zero-crossing rate.
+
+This is intentionally a simple sound-reactive classifier, not speech
+recognition. Thresholds must be calibrated on the real microphone because
+the MAX4466 module has adjustable gain.
 """
 
-from array import array
-from machine import I2S, Pin
+import math
+import time
+from machine import ADC, Pin
 import config
 
 
@@ -16,42 +19,68 @@ class AudioAnalyzer:
     EVENTS = ("silence", "sound_speech", "sound_music", "sound_noise")
 
     def __init__(self):
-        self.i2s = I2S(
-            config.MIC_I2S_ID,
-            sck=Pin(config.MIC_BCLK),
-            ws=Pin(config.MIC_WS),
-            sd=Pin(config.MIC_SD),
-            mode=I2S.RX,
-            bits=config.MIC_SAMPLE_BITS,
-            format=I2S.MONO,
-            rate=config.MIC_SAMPLE_RATE,
-            ibuf=config.MIC_BUFFER_SAMPLES * 8,
-        )
-        self.samples = array("i", [0] * config.MIC_BUFFER_SAMPLES)
+        self.adc = ADC(Pin(config.MIC_ADC_PIN))
+
+        # ESP32-S3 ADC attenuation. 11 dB gives the widest useful input range
+        # for a MAX4466 powered from 3.3 V. The microphone must also be powered
+        # from 3.3 V so its output cannot exceed the ESP32 input supply.
+        if hasattr(ADC, "ATTN_11DB"):
+            self.adc.atten(ADC.ATTN_11DB)
+        elif hasattr(ADC, "ATTN_11DB"):
+            self.adc.atten(ADC.ATTN_11DB)
+
+        self.samples = [0] * config.MIC_SAMPLE_COUNT
         self.last_event = "silence"
         self.last_event_ms = 0
         self.last_rms = 0
         self.last_zcr = 0.0
+        self.last_center = 2048
+
+    def _read_samples(self):
+        """Collect a short audio window and convert ADC readings to 12-bit."""
+        delay_us = config.MIC_SAMPLE_PERIOD_US
+        for i in range(len(self.samples)):
+            # read_u16 is the portable MicroPython ADC API; normalize to the
+            # nominal 12-bit ADC scale for stable, readable thresholds.
+            self.samples[i] = self.adc.read_u16() >> 4
+            if delay_us:
+                time.sleep_us(delay_us)
 
     def _features(self):
+        """Return AC RMS and zero-crossing rate after DC-offset removal."""
+        count = len(self.samples)
+        if count == 0:
+            return 0, 0.0
+
+        # MAX4466 output is centered near VCC/2. Measure the actual center for
+        # every window instead of assuming the ADC midpoint is exactly 2048.
+        center = sum(self.samples) // count
+        self.last_center = center
+
         total = 0
         crossings = 0
-        previous = 0
-        count = len(self.samples)
+        previous_sign = 0
 
-        # INMP441/ESP32 I2S commonly presents 24-bit audio in 32-bit words.
-        # Scale down so thresholds stay in a manageable integer range.
         for raw in self.samples:
-            sample = raw >> 8
+            sample = raw - center
             total += sample * sample
-            sign = 1 if sample >= 0 else -1
-            if previous and sign != previous:
+
+            if sample > 0:
+                sign = 1
+            elif sample < 0:
+                sign = -1
+            else:
+                sign = 0
+
+            if sign and previous_sign and sign != previous_sign:
                 crossings += 1
-            previous = sign
+            if sign:
+                previous_sign = sign
 
         mean_square = total // max(1, count)
-        rms = int(mean_square ** 0.5)
+        rms = int(math.sqrt(mean_square))
         zcr = float(crossings) / max(1, count - 1)
+
         self.last_rms = rms
         self.last_zcr = zcr
         return rms, zcr
@@ -66,10 +95,7 @@ class AudioAnalyzer:
         return "sound_music"
 
     def sample(self, now_ms):
-        read_bytes = self.i2s.readinto(self.samples)
-        if not read_bytes:
-            return None
-
+        self._read_samples()
         rms, zcr = self._features()
         event = self._classify(rms, zcr)
 
@@ -88,7 +114,9 @@ class AudioAnalyzer:
             "event": self.last_event,
             "rms": self.last_rms,
             "zcr": self.last_zcr,
+            "center": self.last_center,
         }
 
     def deinit(self):
-        self.i2s.deinit()
+        # ADC does not require an explicit deinit on MicroPython ESP32.
+        self.adc = None
