@@ -1,36 +1,41 @@
 # Pocket Robot V1
 
-ESP32-S3 desktop companion robot. V1 is designed to run locally on the ESP32-S3 with MicroPython: the controller reads buttons and the INMP441 microphone, updates the emotion state, animates the face and drives the ST7789 display.
+ESP32-S3 desktop companion robot. V1 runs locally on the ESP32-S3 with MicroPython: the controller reads buttons and the MAX4466 analog microphone, updates the emotion state, animates the face and drives the ST7789 display.
 
 ## Hardware target
 - ESP32-S3-DevKitC-1 N16R8
 - ST7789V3 1.69" 240x280 SPI display
-- INMP441 I2S microphone
-- MAX98357A I2S amplifier module
+- MAX4466 analog microphone amplifier, powered from 3.3 V
+- PAM8403 stereo analog amplifier
+- 2 small speakers
 - 3 physical buttons: MODE, ACTION, BACK
-- Li-Po + TP4056 + 5V boost converter
+- Li-Po + TP4056 + MT3608 5 V boost converter
+
+The MAX4466 is the temporary V1 microphone. The architecture keeps the
+microphone behind `AudioAnalyzer`, so an INMP441 I2S microphone can replace it
+later without changing the emotion engine or face renderer.
 
 ## Current firmware architecture
 
 ```text
 buttons ─────────────┐
                      │
-INMP441 ─> Audio ─> event ─> EmotionController
-                     │              │
-                     │              ▼
-                     │       smooth transition
-                     │              │
-                     │              ▼
-                     └──────> FaceRenderer
-                                    │
-                                    ▼
-                              ST7789 driver
-                                    │
-                                    ▼
-                                240x280 pixels
+MAX4466 -> ADC -> Audio -> event -> EmotionController
+                                      │
+                                      ▼
+                               smooth transition
+                                      │
+                                      ▼
+                                  FaceRenderer
+                                      │
+                                      ▼
+                                 ST7789 driver
+                                      │
+                                      ▼
+                                  240x280 pixels
 
 Wi-Fi ───────────────────────> future HTTP/API layer
-MAX98357A <────────────────── future sound/TTS layer
+PAM8403 <──────────────────── future PWM tone/output layer
 ```
 
 ## EmotionController
@@ -70,9 +75,11 @@ The renderer returns simple commands such as `fill_rect`, `fill_ellipse`, `line`
 
 ## Audio reactions
 
-`firmware/audio.py` reads the INMP441 through MicroPython I2S and calculates two lightweight features:
-- RMS level
+`firmware/audio.py` reads the MAX4466 analog output through an ESP32-S3 ADC1 pin and calculates two lightweight features:
+- AC RMS level after DC-offset removal
 - zero-crossing rate
+
+The MAX4466 output is DC-biased around VCC/2, so the firmware estimates the center value for each sample window before calculating the AC signal level.
 
 V1 uses these features for a local heuristic classifier:
 - silence -> neutral/idle
@@ -80,9 +87,7 @@ V1 uses these features for a local heuristic classifier:
 - medium periodic/low-ZCR sound -> music-like/happy
 - loud sound -> surprised
 
-This is deliberately a **V1 heuristic**, not speech recognition or a reliable music classifier. Thresholds are in `firmware/config.py` and will be calibrated after the real microphone is connected.
-
-MicroPython's current I2S API supports ESP32 RX/TX operation with configurable pins, sample width, mono/stereo format and sample rate. citeturn0search0turn0search1
+This is deliberately a **V1 heuristic**, not speech recognition or a reliable music classifier. Thresholds are in `firmware/config.py` and must be calibrated after the real microphone is connected.
 
 ## Display driver
 
@@ -96,11 +101,11 @@ MicroPython's current I2S API supports ESP32 RX/TX operation with configurable p
 - ellipses
 - arcs
 
-The display module's exact offsets/rotation remain configurable in `firmware/config.py`, because the physical 1.69" module must be checked when it arrives.
+The display module's exact offsets/rotation remain configurable in `firmware/config.py`.
 
 ## Pin configuration
 
-The current planned mapping is centralized in `firmware/config.py`:
+The current mapping is centralized in `firmware/config.py`:
 
 | Device | Signal | GPIO |
 |---|---|---:|
@@ -110,17 +115,34 @@ The current planned mapping is centralized in `firmware/config.py`:
 | ST7789 | DC | 9 |
 | ST7789 | RST | 8 |
 | ST7789 | BL | 7 |
-| INMP441 | BCLK | 4 |
-| INMP441 | WS | 5 |
-| INMP441 | SD | 6 |
-| MAX98357A | BCLK | 15 |
-| MAX98357A | WS/LRC | 16 |
-| MAX98357A | DIN | 17 |
+| MAX4466 | OUT / ADC1 | 1 |
+| PAM8403 | PWM audio input | 17 |
 | BACK | button | 14 |
 | MODE | button | 18 |
 | ACTION | button | 21 |
 
-**Important:** this is the planned V1 map. Verify the physical module pinout before soldering. The ESP32 port documentation notes that GPIO availability can be board-specific, so the actual board pin diagram remains the final authority. citeturn1search4
+GPIO1 is used for the microphone because it is an ADC1 input on the ESP32-S3. Avoid using GPIO25 for this purpose: GPIO25 is an ADC2 channel on ESP32-S3, and ADC2 conflicts with Wi-Fi operation.
+
+## Power architecture
+
+```text
+Li-Po 3.7 V
+    |
+  TP4056
+    |
+ ON/OFF
+    |
+ MT3608 adjusted to 5.0 V
+    |
+    +----> ESP32-S3 5V
+    |
+    +----> PAM8403 VCC
+
+ESP32-S3 3.3 V ----> ST7789 VCC
+                  +-> MAX4466 VCC
+```
+
+The MT3608 output must be adjusted and measured at 5.0 V before the 5 V rail is connected to the ESP32-S3 or PAM8403.
 
 ## Wi-Fi
 
@@ -134,24 +156,22 @@ Python server = messages + APIs + memory + future tools
 AI model = future intelligence
 ```
 
-## Flashing plan
-
-The repository is now prepared as a MicroPython V1 firmware tree. When the hardware arrives, the first bring-up should be performed in this order:
+## Flashing / bring-up plan
 
 1. Verify ESP32-S3 board revision and GPIO labels.
 2. Flash a current ESP32-S3 MicroPython firmware.
 3. Upload the contents of `firmware/` to the board.
 4. Check the serial boot log.
-5. Test ST7789 alone and correct `DISPLAY_ROTATION`/offsets if required.
+5. Test ST7789 alone.
 6. Test the three buttons.
-7. Test INMP441 levels and calibrate audio thresholds.
-8. Test MAX98357A/speaker.
+7. Connect MAX4466 to GPIO1 and calibrate the ADC sound thresholds.
+8. Test the PAM8403 output path separately.
 9. Run the complete main loop.
 10. Only then connect the future server/API layer.
 
 ## Important V1 limitation
 
-The code is prepared for the selected hardware, but it has **not been tested on the physical modules yet**. In particular, the exact ST7789 module initialization/offsets and the INMP441 signal level must be verified on the actual boards. The first firmware session should therefore be a controlled hardware bring-up rather than blindly powering every module at once.
+The firmware is prepared for the selected architecture, but the audio thresholds and PAM8403 tone path have not yet been validated on the physical assembled robot. The first hardware session should therefore be a controlled bring-up rather than powering every module at once.
 
 ## Repository layout
 
@@ -163,8 +183,8 @@ firmware/
 ├── emotion.py    # events + smooth emotion transitions
 ├── face.py       # procedural animated face
 ├── display.py    # ST7789 SPI driver
-├── audio.py      # INMP441 + local sound classifier
-├── speaker.py    # MAX98357A I2S output
+├── audio.py      # MAX4466 ADC + local sound classifier
+├── speaker.py    # PAM8403 PWM tone output
 ├── buttons.py    # three debounced buttons
 └── wifi.py       # Wi-Fi connection helper
 
