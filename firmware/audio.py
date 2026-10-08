@@ -21,12 +21,10 @@ class AudioAnalyzer:
     def __init__(self):
         self.adc = ADC(Pin(config.MIC_ADC_PIN))
 
-        # ESP32-S3 ADC attenuation. 11 dB gives the widest useful input range
-        # for a MAX4466 powered from 3.3 V. The microphone must also be powered
-        # from 3.3 V so its output cannot exceed the ESP32 input supply.
+        # 11 dB attenuation gives the widest useful input range for a MAX4466
+        # powered from 3.3 V. The microphone must also be powered from 3.3 V
+        # so its output cannot exceed the ESP32-S3 input supply.
         if hasattr(ADC, "ATTN_11DB"):
-            self.adc.atten(ADC.ATTN_11DB)
-        elif hasattr(ADC, "ATTN_11DB"):
             self.adc.atten(ADC.ATTN_11DB)
 
         self.samples = [0] * config.MIC_SAMPLE_COUNT
