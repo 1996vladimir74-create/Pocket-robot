@@ -1,8 +1,9 @@
 """Hardware configuration for Pocket Robot V1.
 
 Pin numbers are the current planned wiring for ESP32-S3-DevKitC-1 N16R8.
-When the physical modules arrive, check the silkscreen/pinout and change
-ONLY this file if a different GPIO mapping is required.
+The V1 prototype currently uses an analog MAX4466 microphone and PAM8403
+amplifier. The microphone can later be replaced by an INMP441 without
+changing the higher-level emotion architecture.
 """
 
 DEVICE_NAME = "PocketRobot"
@@ -22,21 +23,17 @@ DISPLAY_X_OFFSET = 0
 DISPLAY_Y_OFFSET = 0
 DISPLAY_INVERT = True
 
-# INMP441 I2S microphone
-MIC_I2S_ID = 0
-MIC_BCLK = 4
-MIC_WS = 5
-MIC_SD = 6
-MIC_SAMPLE_RATE = 16000
-MIC_SAMPLE_BITS = 32
-MIC_BUFFER_SAMPLES = 256
+# Analog microphone: MAX4466 -> ESP32-S3 ADC1.
+# GPIO1 is ADC1_CH0 and does not have the ESP32-S3 ADC2/Wi-Fi conflict.
+MIC_ADC_PIN = 1
+MIC_ADC_ATTEN_DB = 11
+MIC_SAMPLE_COUNT = 256
+MIC_SAMPLE_PERIOD_US = 100
 
-# MAX98357A I2S amplifier
-AMP_I2S_ID = 1
-AMP_BCLK = 15
-AMP_WS = 16
-AMP_DIN = 17
-AMP_SAMPLE_RATE = 16000
+# Analog amplifier: PAM8403.
+# Audio playback is not yet driven by main.py. GPIO17 is reserved for a
+# future PWM audio output stage; it is not connected to the microphone.
+AMP_AUDIO_OUT = 17
 
 # Three buttons, active LOW, other side connected to GND.
 BUTTON_BACK = 14
@@ -54,10 +51,12 @@ WIFI_PASSWORD = ""
 WIFI_CONNECT_TIMEOUT_MS = 12000
 WIFI_RETRY_MS = 10000
 
-# Audio classification thresholds. These are heuristic V1 values and will
-# be calibrated on the real microphone.
-AUDIO_SILENCE_RMS = 350
-AUDIO_LOUD_RMS = 2600
+# MAX4466 sound classification thresholds.
+# Values are in approximately 12-bit ADC counts after DC-offset removal.
+# They are intentionally starting values and should be calibrated on the
+# assembled robot because MAX4466 gain is adjustable.
+AUDIO_SILENCE_RMS = 18
+AUDIO_LOUD_RMS = 300
 AUDIO_SPEECH_ZCR_MIN = 0.04
 AUDIO_SPEECH_ZCR_MAX = 0.25
 AUDIO_EVENT_HOLD_MS = 900
