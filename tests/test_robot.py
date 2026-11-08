@@ -108,6 +108,29 @@ class TestEmotionController(unittest.TestCase):
         self.emotion.update(300, 400)
         self.assertEqual(self.emotion.visual_blend, 1.0)
 
+    def test_silence_does_not_cancel_button_reaction(self):
+        self.emotion.handle_event("button_action", now_ms=1000)
+        self.emotion.handle_event("silence", now_ms=1100)
+        self.assertEqual(self.emotion.emotion, "happy")
+
+    def test_silence_works_after_reaction_expired(self):
+        self.emotion.handle_event("button_action", now_ms=1000)
+        self.emotion.tick(4000)
+        self.emotion.handle_event("silence", now_ms=4100)
+        self.assertEqual(self.emotion.emotion, "neutral")
+
+    def test_sleep_not_cancelled_by_microphone(self):
+        self.emotion.handle_event("sleep", now_ms=0)
+        self.emotion.handle_event("sound_speech", now_ms=100)
+        self.assertEqual(self.emotion.state, "sleeping")
+
+    def test_same_emotion_does_not_snap_transition(self):
+        self.emotion.handle_event("button_action", now_ms=0)
+        self.emotion.update(100, 100)
+        blend = self.emotion.visual_blend
+        self.emotion.handle_event("sound_music", now_ms=120)
+        self.assertEqual(self.emotion.visual_blend, blend)
+
 
 class TestFaceRenderer(unittest.TestCase):
     def setUp(self):
