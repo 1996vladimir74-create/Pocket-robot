@@ -1,3 +1,13 @@
+try:
+    from time import ticks_diff, ticks_add
+except ImportError:  # запуск тестов на ПК (обычный Python)
+    def ticks_diff(a, b):
+        return a - b
+
+    def ticks_add(a, b):
+        return a + b
+
+
 class EmotionController:
     """Event-driven emotion controller with smooth visual transitions."""
 
@@ -12,6 +22,10 @@ class EmotionController:
         "sound_speech", "sound_noise", "silence", "message_received",
         "ai_thinking", "sleep", "wake", "error"
     )
+
+    # Пассивные события (микрофон) не должны перебивать реакцию с таймером
+    # и сон: иначе тишина мгновенно стирает счастливое лицо после кнопки.
+    PASSIVE_EVENTS = ("silence", "sound_speech")
 
     def __init__(self, transition_ms=420):
         self.emotion = "neutral"
@@ -34,13 +48,12 @@ class EmotionController:
             raise ValueError("Intensity must be between 0.0 and 1.0")
 
         if emotion != self.emotion:
-            self.from_emotion = self.current_visual_emotion()
+            # Если прервали переход посередине, стартуем с ближайшего лица
+            if self.visual_blend >= 0.5:
+                self.from_emotion = self.to_emotion
             self.to_emotion = emotion
             self.visual_blend = 0.0
-        else:
-            self.from_emotion = emotion
-            self.to_emotion = emotion
-            self.visual_blend = 1.0
+        # Та же эмоция: текущий переход не трогаем, чтобы не было рывка
 
         self.emotion = emotion
         self.state = state
@@ -50,11 +63,17 @@ class EmotionController:
         if duration_ms is None:
             self.expires_at = None
         else:
-            self.expires_at = now_ms + duration_ms
+            self.expires_at = ticks_add(now_ms, duration_ms)
 
     def handle_event(self, event, now_ms=0):
         if event not in self.EVENTS:
             raise ValueError("Unknown event: {}".format(event))
+
+        if event in self.PASSIVE_EVENTS:
+            busy = (self.expires_at is not None
+                    and ticks_diff(now_ms, self.expires_at) < 0)
+            if busy or self.state == "sleeping":
+                return self.status()
 
         if event == "boot":
             self._set("neutral", "idle", 0.5)
@@ -98,7 +117,8 @@ class EmotionController:
                 if self.visual_blend > 1.0:
                     self.visual_blend = 1.0
 
-        if self.expires_at is not None and now_ms is not None and now_ms >= self.expires_at:
+        if (self.expires_at is not None and now_ms is not None
+                and ticks_diff(now_ms, self.expires_at) >= 0):
             self._set("neutral", "idle", 0.4)
 
         return self.status()
