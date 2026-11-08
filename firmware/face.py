@@ -30,6 +30,23 @@ class FaceRenderer:
         self.left_eye_x = int(width * 0.30)
         self.right_eye_x = int(width * 0.70)
 
+    def volume_bar(self, level):
+        """Ten rising bars near the bottom edge for a volume of 0..100 %.
+
+        Returned as drawing commands to append to the face. The face never
+        reaches below y=210, so the bars do not overlap it.
+        """
+        filled = (int(level) + 5) // 10
+        base = self.height - 12
+        x0 = self.cx - 80
+        commands = []
+        for i in range(10):
+            h = 6 + i * 2
+            color = self.FACE_COLOR if i < filled else 0x4208
+            commands.append(self._command(
+                "fill_rect", x=x0 + i * 16, y=base - h, width=12, height=h, color=color))
+        return commands
+
     def _command(self, kind, **kwargs):
         command = {"type": kind}
         command.update(kwargs)
@@ -50,12 +67,12 @@ class FaceRenderer:
             for key in a
         }
 
-    def _eye(self, x, y, width, height, pupil_scale=0.30):
+    def _eye(self, x, y, width, height, pupil_scale=0.30, look=0):
         return [
             self._command("fill_ellipse", x=x, y=y, width=width, height=height, color=self.FACE_COLOR),
             self._command(
                 "fill_ellipse",
-                x=int(x + width * 0.5 - width * pupil_scale * 0.5),
+                x=int(x + width * 0.5 - width * pupil_scale * 0.5) + look,
                 y=int(y + height * 0.5 - height * pupil_scale * 0.5),
                 width=max(2, int(width * pupil_scale)),
                 height=max(2, int(height * pupil_scale)),
@@ -126,6 +143,8 @@ class FaceRenderer:
 
         # Blink is deterministic and does not allocate random state.
         blink = frame % 80 in (0, 1)
+        # Gentle pupil motion makes the face feel alive without a camera.
+        look = int(4 * math.sin(frame * 0.06))
         if profile["eye"] < 0.30:
             commands.extend(self._closed_eye(self.left_eye_x - eye_width // 2,
                                              self.eye_y + eye_height // 2, eye_width))
@@ -138,16 +157,11 @@ class FaceRenderer:
                                              self.eye_y + eye_height // 2, eye_width))
         else:
             commands.extend(self._eye(self.left_eye_x - eye_width // 2,
-                                      self.eye_y, eye_width, eye_height))
+                                      self.eye_y, eye_width, eye_height,
+                                      look=look))
             commands.extend(self._eye(self.right_eye_x - eye_width // 2,
-                                      self.eye_y, eye_width, eye_height))
-
-        # Gentle eye motion makes the face feel alive without a camera.
-        look = int(2 * math.sin(frame * 0.10))
-        if not blink and profile["eye"] >= 0.30:
-            # A tiny pair of black pixels is intentionally avoided here;
-            # pupil motion is added later by a hardware-optimized renderer.
-            pass
+                                      self.eye_y, eye_width, eye_height,
+                                      look=look))
 
         brow_y = self.eye_y - 14
         commands.extend(self._brow(self.left_eye_x - eye_width // 2,
