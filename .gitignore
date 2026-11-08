@@ -6,3 +6,6 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# local secrets (Wi-Fi password etc.)
+firmware/config_local.py
