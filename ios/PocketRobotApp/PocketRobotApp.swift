@@ -1,6 +1,8 @@
 import SwiftUI
 import CoreBluetooth
 import BackgroundTasks
+import UIKit
+import Combine
 
 private let serviceID = CBUUID(string: "12345678-1234-5678-1234-56789abcdef0")
 private let rxID = CBUUID(string: "12345678-1234-5678-1234-56789abcdef1")
@@ -51,7 +53,9 @@ final class PhoneBridge: NSObject, ObservableObject {
     private var isPolling = false
     private var pendingMessageID: Int?
     private var pendingText: String?
-    private var refreshTask: BGAppRefreshTask?
+    private var pendingChunks: [Data] = []
+    private var chunkIndex = 0
+    private var sequence: UInt8 = 0
 
     override init() {
         super.init()
@@ -136,7 +140,22 @@ final class PhoneBridge: NSObject, ObservableObject {
     private func sendPendingIfReady() {
         guard let peripheral = robot, let characteristic = rxCharacteristic,
               let text = pendingText, peripheral.state == .connected else { return }
-        peripheral.writeValue(Data(text.utf8), for: characteristic, type: .withResponse)
+        if pendingChunks.isEmpty {
+            let bytes = Array(text.utf8)
+            let payloadLimit = max(1, min(13, peripheral.maximumWriteValueLength(for: .withResponse) - 7))
+            let count = max(1, (bytes.count + payloadLimit - 1) / payloadLimit)
+            sequence &+= 1
+            pendingChunks = (0..<count).map { index in
+                let start = index * payloadLimit
+                let end = min(bytes.count, start + payloadLimit)
+                var packet = Data(String(format: "P%02X%02X%02X", sequence, index, count).utf8)
+                if start < end { packet.append(contentsOf: bytes[start..<end]) }
+                return packet
+            }
+            chunkIndex = 0
+        }
+        guard chunkIndex < pendingChunks.count else { return }
+        peripheral.writeValue(pendingChunks[chunkIndex], for: characteristic, type: .withResponse)
     }
 
     private func acknowledgeOnServer(_ id: Int) async {
@@ -208,8 +227,15 @@ extension PhoneBridge: CBPeripheralDelegate {
             status = "Ошибка передачи BLE"
             return
         }
+        chunkIndex += 1
+        if chunkIndex < pendingChunks.count {
+            sendPendingIfReady()
+            return
+        }
         pendingMessageID = nil
         pendingText = nil
+        pendingChunks = []
+        chunkIndex = 0
         status = "Уведомление доставлено роботу"
         Task { await acknowledgeOnServer(id) }
     }
