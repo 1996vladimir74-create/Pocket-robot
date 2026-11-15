@@ -17,7 +17,7 @@ struct PocketRobotApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(bridge: bridge)
-                .onChange(of: scenePhase) { _, phase in
+                .onChange(of: scenePhase) { phase in
                     if phase == .active { bridge.startForegroundPolling() }
                     else { bridge.stopForegroundPolling() }
                 }
@@ -25,6 +25,7 @@ struct PocketRobotApp: App {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
