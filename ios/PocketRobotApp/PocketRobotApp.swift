@@ -274,5 +274,6 @@ struct ContentView: View {
             }
             .navigationTitle("Pocket Robot")
         }
+        .onAppear { bridge.startForegroundPolling() }
     }
 }
