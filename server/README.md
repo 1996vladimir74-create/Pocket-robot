@@ -1,101 +1,48 @@
-# Pocket Robot — домашний сервер сообщений
+# Pocket Robot — server, weather, VK and phone relay
 
-Эта версия сервера рассчитана на запуск на Android-смартфоне через Termux. Она принимает сообщения из простой веб-страницы, сохраняет их в SQLite и отдаёт ESP32-S3 через HTTP API. После успешного отображения робот подтверждает сообщение.
+## Current architecture
+- Home: ESP32-S3 -> home Wi-Fi -> Android phone running Flask/SQLite -> weather and messages.
+- Away: Android server phone -> private Tailscale network -> iPhone app -> BLE -> ESP32-S3.
+- Future fallback: ESP32 Wi-Fi network list supports home router first and iPhone Personal Hotspot second. The hotspot is not required for the initial test.
 
-## 1. Подготовка Termux
+## Termux setup
+1. Install Python in Termux.
+2. Clone branch `feature/phone-bridge-weather-vk`.
+3. `cd server && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+4. `cp config.example.py config.py`, set three different long tokens and weather coordinates.
+5. Keep `VK_ENABLED=False` for the first test.
+6. Run `python app.py`; verify `http://ANDROID_LAN_IP:8080/health` from another device on the same Wi-Fi.
 
-На телефоне уже должны быть установлены Python и pip. В Termux:
+## Local home test
+- ESP32 config_local.py: home SSID/password, server LAN IP, DEVICE_TOKEN.
+- Open the server home page from a second device, enter ADMIN_TOKEN, send a message.
+- ESP32 should show the message and keep it on-screen until MODE is pressed.
+- The weather screen appears for five seconds after a successful weather refresh, then the face returns.
+- Weather endpoint: `GET /api/robot/weather`; source is Open-Meteo, no API key required.
 
-```sh
-mkdir -p ~/pocket_robot_server
-```
+## Remote iPhone relay
+The server is hosted on the Android phone. For remote access, both Android and iPhone need to join the same private Tailscale network. Use the Android phone's Tailscale IPv4 as the iOS app URL, e.g. `http://100.x.y.z:8080`. The iOS app uses PHONE_TOKEN, not DEVICE_TOKEN. Do not expose port 8080 directly to the public internet.
 
-Получите файлы проекта прямо в Termux (если Git ещё не установлен):
+The iOS source is in `ios/PocketRobotApp/`. It scans for the ESP32 GATT service, polls the phone queue while active, writes notification text over BLE, and acknowledges the phone queue only after the BLE write succeeds. The app also requests opportunistic iOS background refresh.
 
-```sh
-pkg install git
-cd ~
-git clone -b feature/phone-server-message-demo https://github.com/1996vladimir74-create/Pocket-robot.git
-cp -r Pocket-robot/server/. ~/pocket_robot_server/
-```
+## VK setup — optional
+- VK integration is off by default.
+- If VK provides a valid user token with access to message history for your account, set `VK_ENABLED=True`, `VK_TOKEN`, `VK_PEER_ID` (only the private dialog peer ID) and `VK_FROM_ID` (your VK account ID).
+- The watcher calls `messages.getHistory` only for that one peer and forwards only items whose `peer_id` and `from_id` match the configured values. It does not enumerate or store other conversations.
+- On first run it saves the latest message ID as a baseline and does not replay old messages.
+- VK may reject the token, method or permission. If so, VK delivery is unavailable until an officially supported access method is configured. The app does not read iOS notifications.
 
-Затем:
+## API
+- `GET /health`
+- `POST /api/messages` (ADMIN_TOKEN) — adds one event to independent robot and phone queues
+- `GET /api/robot/messages/next`, `POST /api/robot/messages/ID/ack` (DEVICE_TOKEN)
+- `GET /api/phone/messages/next`, `POST /api/phone/messages/ID/ack` (PHONE_TOKEN)
+- `GET /api/robot/weather` (DEVICE_TOKEN)
+- `GET /api/status`
 
-```sh
-cd ~/pocket_robot_server
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-cp config.example.py config.py
-nano config.py
-```
-
-В `config.py` замените оба значения на разные длинные секреты. Пример:
-
-```python
-HOST = "0.0.0.0"
-PORT = 8080
-ADMIN_TOKEN = "ваш-длинный-секрет-для-отправки"
-DEVICE_TOKEN = "другой-длинный-секрет-для-робота"
-```
-
-Не отправляйте эти токены в GitHub и не используйте их где-либо ещё.
-
-## 2. Запуск
-
-```sh
-python app.py
-```
-
-В Termux должно появиться сообщение о запуске Flask на порту 8080. Не закрывайте эту сессию.
-
-Узнайте IP смартфона:
-
-```sh
-ip addr show wlan0
-```
-
-На другом устройстве, подключённом к той же Wi-Fi сети, проверьте `http://IP_ТЕЛЕФОНА:8080/health`, затем откройте `http://IP_ТЕЛЕФОНА:8080/`.
-
-## 3. Настройка ESP32-S3
-
-В локальной копии репозитория создайте `firmware/config_local.py` на основе `firmware/config_local.example.py`. Заполните Wi-Fi и параметры сервера:
-
-- `SERVER_HOST`: IP смартфона без схемы `http://`, например `192.168.0.105`;
-- `SERVER_PORT`: 8080;
-- `SERVER_DEVICE_TOKEN`: значение `DEVICE_TOKEN` из серверного `config.py`.
-
-Файл `firmware/config_local.py` исключён из Git. Не публикуйте его.
-
-Загрузите на ESP32-S3 обновлённые `config.py`, `config_local.py`, `server_client.py`, `main.py`, `face.py` и `display.py` (а также остальные файлы прошивки, если они ещё не загружены). Перезагрузите робота.
-
-После подключения к Wi-Fi ESP32 опрашивает сервер раз в 15 секунд. При получении сообщения робот показывает экран уведомления примерно 10 секунд, затем отправляет подтверждение. Если подтверждение не прошло, сервер сможет повторно выдать сообщение после 120 секунд.
-
-**Первый тест проводите коротким сообщением латиницей**, например `Hello! Pocket Robot is online.` Встроенный шрифт MicroPython FrameBuffer не умеет полноценно отображать кириллицу: неподдерживаемые символы заменяются на `?`.
-
-## 4. Проверка сценария
-
-1. Запустите сервер на телефоне.
-2. Убедитесь, что робот и телефон подключены к одной Wi-Fi сети.
-3. Откройте веб-страницу сервера на втором смартфоне или компьютере.
-4. Введите `ADMIN_TOKEN`, отправьте короткое сообщение.
-5. В течение примерно 15 секунд робот должен показать уведомление.
-6. На экране Termux появятся строки `Message received` и `Message acknowledged`.
-
-## 5. API
-
-- `GET /health` — состояние сервера, без авторизации.
-- `POST /api/messages` — добавить сообщение; `Authorization: Bearer ADMIN_TOKEN`, JSON `{"text":"Hello robot"}`.
-- `GET /api/robot/messages/next` — получить сообщение; `Authorization: Bearer DEVICE_TOKEN`.
-- `POST /api/robot/messages/ID/ack` — подтвердить отображение; `Authorization: Bearer DEVICE_TOKEN`.
-- `GET /api/messages/recent` — последние сообщения; `ADMIN_TOKEN`.
-
-## 6. Ограничения и безопасность первой версии
-
-- Это тестовая версия для одной домашней Wi-Fi сети и одного робота.
-- Используется обычный HTTP. **Не открывайте порт 8080 в интернет и не используйте эту версию вне доверенной локальной сети.** Для удалённой отправки добавим HTTPS-туннель и отдельно проверим безопасность.
-- VK Callback API и погодный сервис пока не подключены.
-- Очередь хранится в `server/data/robot.db`; каталог создаётся автоматически.
-- Сообщение ограничено 240 символами; экран выводит только несколько коротких строк.
-- Android может ограничивать фоновые процессы Termux. Для теста оставляйте Termux запущенным; позже отдельно проверим работу с выключенным экраном и восстановление после перезагрузки.
-- Текущая реализация рассчитана на один ESP32-S3 и одну очередь сообщений.
+## Limitations before real-device testing
+- iOS does not guarantee periodic background refresh. If the app is force-quit or iOS does not schedule refresh, remote messages may wait until the app is opened.
+- Core Bluetooth background mode and state restoration help, but are not a promise of uninterrupted operation.
+- VK API access is not guaranteed; verify with the exact token before relying on it.
+- No APNs push sender is configured yet. A later APNs implementation requires Apple Developer credentials and server-side configuration.
+- This branch has not been built on ESP32 hardware or compiled with Xcode. Validate each link in the chain before calling the system operational.
