@@ -113,7 +113,16 @@ INDEX_HTML="""<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="v
 <script>send.onclick=async()=>{try{let r=await fetch('/api/messages',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token.value},body:JSON.stringify({text:message.value})});let j=await r.json();result.textContent=r.ok?'Добавлено, ID '+j.id:'Ошибка '+(j.error||r.status)}catch(e){result.textContent=String(e)}}</script></html>"""
 
 if __name__=="__main__":
-    from config import ADMIN_TOKEN,DEVICE_TOKEN,PHONE_TOKEN,HOST,PORT
+    from config import (ADMIN_TOKEN,DEVICE_TOKEN,PHONE_TOKEN,HOST,PORT,
+        WEATHER_LATITUDE,WEATHER_LONGITUDE,WEATHER_TIMEZONE,
+        VK_ENABLED,VK_TOKEN,VK_API_VERSION,VK_PEER_ID,VK_FROM_ID,VK_POLL_SECONDS)
     for value in (ADMIN_TOKEN,DEVICE_TOKEN,PHONE_TOKEN):
         if not value or "change-this" in value: raise SystemExit("Set unique tokens in server/config.py")
-    create_app({"ADMIN_TOKEN":ADMIN_TOKEN,"DEVICE_TOKEN":DEVICE_TOKEN,"PHONE_TOKEN":PHONE_TOKEN}).run(host=HOST,port=PORT,debug=False)
+    runtime_config={
+        "ADMIN_TOKEN":ADMIN_TOKEN,"DEVICE_TOKEN":DEVICE_TOKEN,"PHONE_TOKEN":PHONE_TOKEN,
+        "WEATHER_LATITUDE":WEATHER_LATITUDE,"WEATHER_LONGITUDE":WEATHER_LONGITUDE,
+        "WEATHER_TIMEZONE":WEATHER_TIMEZONE,"VK_ENABLED":VK_ENABLED,"VK_TOKEN":VK_TOKEN,
+        "VK_API_VERSION":VK_API_VERSION,"VK_PEER_ID":VK_PEER_ID,"VK_FROM_ID":VK_FROM_ID,
+        "VK_POLL_SECONDS":VK_POLL_SECONDS,
+    }
+    create_app(runtime_config).run(host=HOST,port=PORT,debug=False)
