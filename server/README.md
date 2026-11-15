@@ -10,7 +10,16 @@
 mkdir -p ~/pocket_robot_server
 ```
 
-Скопируйте **содержимое каталога `server/`** репозитория в `~/pocket_robot_server/`. Затем:
+Получите файлы проекта прямо в Termux (если Git ещё не установлен):
+
+```sh
+pkg install git
+cd ~
+git clone -b feature/phone-server-message-demo https://github.com/1996vladimir74-create/Pocket-robot.git
+cp -r Pocket-robot/server/. ~/pocket_robot_server/
+```
+
+Затем:
 
 ```sh
 cd ~/pocket_robot_server
