@@ -34,7 +34,7 @@ MAX4466 -> ADC -> Audio -> event -> EmotionController
                                       ▼
                                   240x280 pixels
 
-Wi-Fi ───────────────────────> future HTTP/API layer
+Wi-Fi ───────────────────────> optional phone server (remote messages)
 MAX98357A <────────────────── speaker.py (I2S tones, software volume)
 ```
 
@@ -193,6 +193,12 @@ AI model = future intelligence
 10. Only then connect the future server/API layer.
 
 Run the PC-side tests (no hardware needed) with `python -m unittest discover -s tests`.
+
+## Phone-hosted message server (prototype)
+
+The repository now includes a small Flask + SQLite server in `server/`. It can run on an Android phone in Termux, accept a message from its web page, and deliver it to the ESP32-S3 over the same Wi-Fi network. The robot polls every 15 seconds, displays an ASCII notification, then acknowledges it.
+
+Follow [server/README.md](server/README.md) for setup. Keep `server/config.py` and `firmware/config_local.py` private. The first version uses local HTTP only: do not expose port 8080 to the public internet. VK integration, weather, and HTTPS remote access are future stages.
 
 ## Important V1 limitation
 
