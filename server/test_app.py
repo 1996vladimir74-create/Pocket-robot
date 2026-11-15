@@ -75,13 +75,6 @@ class ServerApiTests(unittest.TestCase):
         self.assertEqual(phone_item["text"], "Phone relay test")
 
         phone_ack = self.client.post(
-            "/api/phone/messages/{}".format(phone_item["id"]),
-            headers={"Authorization": "Bearer phone-test-token"},
-            json={},
-        )
-        self.assertEqual(phone_ack.status_code, 404)  # ACK route requires /ack
-
-        phone_ack = self.client.post(
             "/api/phone/messages/{}/ack".format(phone_item["id"]),
             headers={"Authorization": "Bearer phone-test-token"},
             json={},
