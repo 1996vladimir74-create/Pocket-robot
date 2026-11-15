@@ -172,5 +172,34 @@ class FaceRenderer:
         commands.extend(self._mouth(profile["mouth"], profile["open"], intensity))
         return commands
 
+    def message_screen(self, message):
+        """Render a short ASCII notification using MicroPython's built-in font."""
+        text = str(message).encode("ascii", "replace").decode()
+        text = " ".join(text.replace("\\n", " ").split())[:120]
+        lines = []
+        while text and len(lines) < 5:
+            if len(text) <= 22:
+                lines.append(text)
+                break
+            cut = text.rfind(" ", 0, 23)
+            if cut < 1:
+                cut = 22
+            lines.append(text[:cut])
+            text = text[cut:].strip()
+        commands = [
+            self._command("fill_rect", x=0, y=0, width=self.width,
+                          height=self.height, color=self.BACKGROUND),
+            self._command("line", x1=12, y1=12, x2=self.width - 12, y2=12,
+                          color=self.FACE_COLOR, thickness=2),
+            self._command("text", text="NEW MESSAGE", x=18, y=28,
+                          color=self.FACE_COLOR),
+        ]
+        for i, line in enumerate(lines):
+            commands.append(self._command("text", text=line, x=12,
+                                          y=76 + i * 24, color=self.FACE_COLOR))
+        commands.append(self._command("text", text="POCKET ROBOT", x=18, y=245,
+                                      color=0x7BEF))
+        return commands
+
     def frame_count(self):
         return 80
