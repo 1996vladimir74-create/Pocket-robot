@@ -262,6 +262,12 @@ def main():
             try:
                 wifi.maintain()
                 robot.set_wifi(wifi.connected)
+                if wifi.connected and getattr(config, "SERVER_DEVICE_TOKEN", ""):
+                    active_host = wifi.server_host
+                    if active_host and (server_client is None or server_client.host != active_host):
+                        server_client = ServerClient(active_host, config.SERVER_PORT,
+                            config.SERVER_DEVICE_TOKEN, getattr(config, "SERVER_TIMEOUT_S", 4))
+                        print("Server host selected:", active_host)
                 if server_client is not None and wifi.connected:
                     due = (ctx["last_server_poll"] is None or
                            time.ticks_diff(now, ctx["last_server_poll"]) >=
