@@ -18,6 +18,7 @@ class ServerApiTests(unittest.TestCase):
             "DATABASE": os.path.join(self.tmp.name, "test.db"),
             "ADMIN_TOKEN": "admin-test-token",
             "DEVICE_TOKEN": "device-test-token",
+            "PHONE_TOKEN": "phone-test-token",
         })
         self.client = self.app.test_client()
 
@@ -58,6 +59,40 @@ class ServerApiTests(unittest.TestCase):
             headers={"Authorization": "Bearer device-test-token"},
         )
         self.assertIsNone(empty.get_json()["message"])
+
+    def test_phone_queue_is_independent_from_robot_queue(self):
+        sent = self.client.post(
+            "/api/messages",
+            headers={"Authorization": "Bearer admin-test-token"},
+            json={"text": "Phone relay test"},
+        )
+        self.assertEqual(sent.status_code, 201)
+
+        phone_item = self.client.get(
+            "/api/phone/messages/next",
+            headers={"Authorization": "Bearer phone-test-token"},
+        ).get_json()["message"]
+        self.assertEqual(phone_item["text"], "Phone relay test")
+
+        phone_ack = self.client.post(
+            "/api/phone/messages/{}".format(phone_item["id"]),
+            headers={"Authorization": "Bearer phone-test-token"},
+            json={},
+        )
+        self.assertEqual(phone_ack.status_code, 404)  # ACK route requires /ack
+
+        phone_ack = self.client.post(
+            "/api/phone/messages/{}/ack".format(phone_item["id"]),
+            headers={"Authorization": "Bearer phone-test-token"},
+            json={},
+        )
+        self.assertEqual(phone_ack.status_code, 200)
+
+        robot_item = self.client.get(
+            "/api/robot/messages/next",
+            headers={"Authorization": "Bearer device-test-token"},
+        ).get_json()["message"]
+        self.assertEqual(robot_item["text"], "Phone relay test")
 
     def test_wrong_tokens_are_rejected(self):
         response = self.client.post(
