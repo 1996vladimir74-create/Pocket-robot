@@ -5,3 +5,9 @@ WIFI_PASSWORD = "your-password"
 
 # Any other value from config.py can be overridden here too, e.g.:
 # DISPLAY_SPI_BAUD = 40000000
+
+# Phone-hosted Pocket Robot server (first test on the same Wi-Fi network).
+# Use the phone's current local IP and DEVICE_TOKEN from server/config.py.
+SERVER_HOST = "192.168.0.105"
+SERVER_PORT = 8080
+SERVER_DEVICE_TOKEN = "replace-with-your-device-token"
