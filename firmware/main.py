@@ -11,6 +11,7 @@ from audio import AudioAnalyzer
 from speaker import Speaker
 from buttons import Buttons
 from wifi import WiFiManager
+from server_client import ServerClient
 
 # MODE button cycles through these faces (handy for the first bring-up).
 DEMO_EMOTIONS = ("happy", "sad", "sleepy", "surprised", "angry", "neutral")
@@ -80,6 +81,7 @@ def main():
     speaker = None
     buttons = None
     wifi = None
+    server_client = None
     wdt = None
 
     # Hardware is initialized independently so one missing module does not
@@ -115,6 +117,15 @@ def main():
     except Exception as exc:
         print("Wi-Fi ERROR:", exc)
 
+    if getattr(config, "SERVER_HOST", "") and getattr(config, "SERVER_DEVICE_TOKEN", ""):
+        try:
+            server_client = ServerClient(config.SERVER_HOST, config.SERVER_PORT,
+                                          config.SERVER_DEVICE_TOKEN,
+                                          getattr(config, "SERVER_TIMEOUT_S", 2))
+            print("Message server: configured")
+        except Exception as exc:
+            _report("Message server init", exc)
+
     if config.USE_WDT:
         try:
             from machine import WDT
@@ -123,7 +134,9 @@ def main():
         except Exception as exc:
             print("Watchdog ERROR:", exc)
 
-    ctx = {"demo": -1, "bar_until": None}
+    ctx = {"demo": -1, "bar_until": None, "message_until": None,
+           "message_id": None, "message_acked": False, "last_server_poll": None,
+           "last_ack_attempt": None}
     now = time.ticks_ms()
     emotions.handle_event("boot", now)
     status = emotions.status()
@@ -176,13 +189,21 @@ def main():
             robot.set_mood(status["emotion"], status["intensity"])
             robot.set_state(status["state"])
 
-            commands = face.render(
-                status["to_emotion"],
-                status["visual_intensity"],
-                frame=frame,
-                from_emotion=status["from_emotion"],
-                blend=status["visual_blend"],
-            )
+            if robot.message is not None and ctx["message_until"] is not None:
+                if time.ticks_diff(now, ctx["message_until"]) < 0:
+                    commands = face.message_screen(robot.message)
+                else:
+                    robot.clear_message()
+                    ctx["message_until"] = None
+                    ctx["message_id"] = None
+                    ctx["message_acked"] = False
+                    commands = face.render(
+                        status["to_emotion"], status["visual_intensity"], frame=frame,
+                        from_emotion=status["from_emotion"], blend=status["visual_blend"])
+            else:
+                commands = face.render(
+                    status["to_emotion"], status["visual_intensity"], frame=frame,
+                    from_emotion=status["from_emotion"], blend=status["visual_blend"])
             if ctx["bar_until"] is not None:
                 if time.ticks_diff(now, ctx["bar_until"]) < 0:
                     commands = commands + face.volume_bar(robot.volume)
@@ -192,6 +213,17 @@ def main():
                 started = time.ticks_ms()
                 display.render(commands)
                 render_ms = time.ticks_diff(time.ticks_ms(), started)
+                if (robot.message is not None and ctx["message_id"] is not None
+                        and not ctx["message_acked"] and server_client is not None
+                        and (ctx["last_ack_attempt"] is None or
+                             time.ticks_diff(now, ctx["last_ack_attempt"]) >= 5000)):
+                    ctx["last_ack_attempt"] = now
+                    try:
+                        server_client.acknowledge(ctx["message_id"])
+                        ctx["message_acked"] = True
+                        print("Message acknowledged:", ctx["message_id"])
+                    except Exception as exc:
+                        _report("Message ACK", exc)
             _ok("Render")
         except Exception as exc:
             _report("Render", exc)
@@ -201,6 +233,25 @@ def main():
             try:
                 wifi.maintain()
                 robot.set_wifi(wifi.connected)
+                if server_client is not None and wifi.connected:
+                    due = (ctx["last_server_poll"] is None or
+                           time.ticks_diff(now, ctx["last_server_poll"]) >=
+                           getattr(config, "SERVER_POLL_INTERVAL_MS", 15000))
+                    if due and robot.message is None:
+                        ctx["last_server_poll"] = now
+                        try:
+                            incoming = server_client.poll()
+                            if incoming and incoming.get("id") is not None:
+                                robot.set_message(incoming.get("text", ""))
+                                ctx["message_id"] = incoming["id"]
+                                ctx["message_acked"] = False
+                                ctx["last_ack_attempt"] = None
+                                ctx["message_until"] = time.ticks_add(
+                                    now, getattr(config, "SERVER_MESSAGE_DISPLAY_MS", 10000))
+                                emotions.handle_event("message_received", now)
+                                print("Message received:", incoming["id"])
+                        except Exception as exc:
+                            _report("Message poll", exc)
                 _ok("Wi-Fi")
             except Exception as exc:
                 _report("Wi-Fi", exc)

@@ -9,3 +9,7 @@ venv/
 
 # local secrets (Wi-Fi password etc.)
 firmware/config_local.py
+
+# phone-hosted server secrets and runtime database
+server/config.py
+server/data/
