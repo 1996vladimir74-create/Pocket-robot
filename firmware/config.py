@@ -93,6 +93,15 @@ WIFI_PASSWORD = ""
 WIFI_CONNECT_TIMEOUT_MS = 12000
 WIFI_RETRY_MS = 10000
 
+# ---------------------------------------------------------- Message server
+# Empty SERVER_HOST disables remote-message polling.
+SERVER_HOST = ""
+SERVER_PORT = 8080
+SERVER_DEVICE_TOKEN = ""
+SERVER_POLL_INTERVAL_MS = 15000
+SERVER_TIMEOUT_S = 2
+SERVER_MESSAGE_DISPLAY_MS = 10000
+
 # ------------------------------------------------ Sound classification
 # Values are in ~12-bit ADC counts after DC-offset removal. They are
 # starting values: calibrate with calibrate_mic.py on the assembled robot
