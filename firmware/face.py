@@ -201,5 +201,30 @@ class FaceRenderer:
                                       color=0x7BEF))
         return commands
 
+
+    def weather_screen(self, weather):
+        """Render current weather values supplied by the server."""
+        temp = weather.get("temperature_c")
+        feels = weather.get("feels_like_c")
+        wind = weather.get("wind_kmh")
+        humidity = weather.get("humidity_percent")
+        def fmt(value, suffix):
+            return "--" if value is None else "{}{}".format(round(value), suffix)
+        lines = [
+            "TEMP  " + fmt(temp, " C"),
+            "FEELS " + fmt(feels, " C"),
+            "WIND  " + fmt(wind, " km/h"),
+            "HUMID " + fmt(humidity, " %"),
+        ]
+        commands = [
+            self._command("fill_rect", x=0, y=0, width=self.width, height=self.height, color=self.BACKGROUND),
+            self._command("text", text="WEATHER", x=18, y=28, color=self.FACE_COLOR),
+            self._command("line", x1=12, y1=50, x2=self.width-12, y2=50, color=self.FACE_COLOR, thickness=2),
+        ]
+        for i, line in enumerate(lines):
+            commands.append(self._command("text", text=line, x=18, y=82+i*32, color=self.FACE_COLOR))
+        commands.append(self._command("text", text="OPEN-METEO", x=18, y=245, color=0x7BEF))
+        return commands
+
     def frame_count(self):
         return 80
