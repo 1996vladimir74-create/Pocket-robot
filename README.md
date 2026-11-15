@@ -34,7 +34,7 @@ MAX4466 -> ADC -> Audio -> event -> EmotionController
                                       ▼
                                   240x280 pixels
 
-Wi-Fi ───────────────────────> future HTTP/API layer
+Wi-Fi ───────────────────────> optional phone server (remote messages)
 MAX98357A <────────────────── speaker.py (I2S tones, software volume)
 ```
 
@@ -194,6 +194,12 @@ AI model = future intelligence
 
 Run the PC-side tests (no hardware needed) with `python -m unittest discover -s tests`.
 
+## Phone-hosted message server (prototype)
+
+The repository now includes a small Flask + SQLite server in `server/`. It can run on an Android phone in Termux, accept a message from its web page, and deliver it to the ESP32-S3 over the same Wi-Fi network. The robot polls every 15 seconds, displays an ASCII notification, then acknowledges it.
+
+Follow [server/README.md](server/README.md) for setup. Keep `server/config.py` and `firmware/config_local.py` private. The first version uses local HTTP only: do not expose port 8080 to the public internet. VK integration, weather, and HTTPS remote access are future stages.
+
 ## Important V1 limitation
 
 The firmware is prepared for the selected architecture, but the audio thresholds and the MAX98357A speaker path have not yet been validated on the physical assembled robot. The first hardware session should therefore be a controlled bring-up rather than powering every module at once.
@@ -222,3 +228,14 @@ tests/
 ├── test_hardware.py        # audio, display, speaker, main loop (fake hardware)
 └── fakes.py                # PC stand-ins for machine / framebuf / SPI
 ```
+
+## Server, weather and iPhone relay (development branch)
+
+The integration branch `feature/phone-bridge-weather-vk` adds:
+- Android Termux Flask server with separate ESP32 and iPhone message queues.
+- Open-Meteo current weather endpoint and a short weather screen on the robot.
+- Optional VK watcher restricted to one configured `peer_id` and one sender `from_id`.
+- ESP32 BLE GATT peripheral and SwiftUI/CoreBluetooth iPhone companion source.
+- Ordered Wi-Fi failover for home router and, later, iPhone Personal Hotspot.
+
+Start with `server/README.md` and `ios/README.md`. Do not merge this branch into `main` or flash it as a verified release until the Python tests, MicroPython syntax checks, hardware BLE test, iOS build and real background-delivery test have passed. The iOS source cannot be compiled without an Xcode/macOS environment. iOS background refresh is opportunistic and not a guaranteed real-time message transport.

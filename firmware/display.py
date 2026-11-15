@@ -222,6 +222,9 @@ class ST7789:
             self.arc(command["x"], command["y"], command["width"],
                      command["height"], command["start"], command["end"],
                      command["color"], command.get("thickness", 1))
+        elif kind == "text":
+            self.fb.text(command["text"], int(command["x"]), int(command["y"]),
+                         self._c(command["color"]))
 
     # ------------------------------------------------------------- rendering
     def _scan(self, commands):
@@ -240,6 +243,9 @@ class ST7789:
                 t = c.get("thickness", 1) // 2 + 3
                 y0 = min(c["y1"], c["y2"]) - t
                 y1 = max(c["y1"], c["y2"]) + t
+            elif kind == "text":
+                y0 = c["y"] - 2
+                y1 = c["y"] + 10
             else:
                 if (kind == "fill_rect" and c["x"] <= 0 and c["y"] <= 0
                         and c["width"] >= self.width
