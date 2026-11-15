@@ -11,6 +11,7 @@
 3. `cd server && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
 4. `cp config.example.py config.py`, set three different long tokens and weather coordinates.
 5. Keep `VK_ENABLED=False` for the first test.
+6. Run `termux-wake-lock` in Termux while testing and exclude Termux from Android battery optimization if the phone offers that setting; Android may otherwise pause the server process.
 6. Run `python app.py`; verify `http://ANDROID_LAN_IP:8080/health` from another device on the same Wi-Fi.
 
 ## Local home test
@@ -21,7 +22,7 @@
 - Weather endpoint: `GET /api/robot/weather`; source is Open-Meteo, no API key required.
 
 ## Remote iPhone relay
-The server is hosted on the Android phone. For remote access, both Android and iPhone need to join the same private Tailscale network. Use the Android phone's Tailscale IPv4 as the iOS app URL, e.g. `http://100.x.y.z:8080`. The iOS app uses PHONE_TOKEN, not DEVICE_TOKEN. Do not expose port 8080 directly to the public internet.
+The server is hosted on the Android phone. For remote access, both Android and iPhone need to join the same private Tailscale network. Use the Android phone's Tailscale IPv4 as the iOS app URL, e.g. `http://100.x.y.z:8080`. The iOS app uses PHONE_TOKEN, not DEVICE_TOKEN. Keep the server process alive on Android. Do not expose port 8080 directly to the public internet.
 
 The iOS source is in `ios/PocketRobotApp/`. It scans for the ESP32 GATT service, polls the phone queue while active, writes notification text over BLE, and acknowledges the phone queue only after the BLE write succeeds. The app also requests opportunistic iOS background refresh.
 
@@ -46,3 +47,10 @@ The iOS source is in `ios/PocketRobotApp/`. It scans for the ESP32 GATT service,
 - VK API access is not guaranteed; verify with the exact token before relying on it.
 - No APNs push sender is configured yet. A later APNs implementation requires Apple Developer credentials and server-side configuration.
 - This branch has not been built on ESP32 hardware or compiled with Xcode. Validate each link in the chain before calling the system operational.
+
+
+## iPhone Personal Hotspot fallback
+The ESP32 Wi-Fi manager supports an ordered list of networks. Use three values per entry:
+`(SSID, password, server_host_on_that_network)`.
+For the future hotspot test, the Android phone running the server must also join the iPhone hotspot; otherwise the ESP32 has no local route to the Android server. Find the Android phone's IP while it is connected to the hotspot and place that address in the third field for the iPhone-hotspot entry in `firmware/config_local.py`. The sample `172.20.10.2` is only a placeholder; do not assume it is the assigned address.
+No mobile-operator change is inherently required to use Personal Hotspot. If tethering is disabled by the current mobile plan or carrier settings, that restriction must be resolved with the carrier.
