@@ -228,3 +228,14 @@ tests/
 ├── test_hardware.py        # audio, display, speaker, main loop (fake hardware)
 └── fakes.py                # PC stand-ins for machine / framebuf / SPI
 ```
+
+## Server, weather and iPhone relay (development branch)
+
+The integration branch `feature/phone-bridge-weather-vk` adds:
+- Android Termux Flask server with separate ESP32 and iPhone message queues.
+- Open-Meteo current weather endpoint and a short weather screen on the robot.
+- Optional VK watcher restricted to one configured `peer_id` and one sender `from_id`.
+- ESP32 BLE GATT peripheral and SwiftUI/CoreBluetooth iPhone companion source.
+- Ordered Wi-Fi failover for home router and, later, iPhone Personal Hotspot.
+
+Start with `server/README.md` and `ios/README.md`. Do not merge this branch into `main` or flash it as a verified release until the Python tests, MicroPython syntax checks, hardware BLE test, iOS build and real background-delivery test have passed. The iOS source cannot be compiled without an Xcode/macOS environment. iOS background refresh is opportunistic and not a guaranteed real-time message transport.
