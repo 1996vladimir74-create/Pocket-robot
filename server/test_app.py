@@ -61,7 +61,7 @@ class ServerApiTests(unittest.TestCase):
         )
         self.assertIsNone(empty.get_json()["message"])
 
-    def test_phone_queue_is_independent_from_robot_queue(self):
+    def test_acknowledging_phone_relay_retires_both_queue_copies(self):
         sent = self.client.post(
             "/api/messages",
             headers={"Authorization": "Bearer admin-test-token"},
@@ -86,7 +86,7 @@ class ServerApiTests(unittest.TestCase):
             "/api/robot/messages/next",
             headers={"Authorization": "Bearer device-test-token"},
         ).get_json()["message"]
-        self.assertEqual(robot_item["text"], "Phone relay test")
+        self.assertIsNone(robot_item)
 
     def test_wrong_tokens_are_rejected(self):
         response = self.client.post(
