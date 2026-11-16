@@ -34,7 +34,7 @@ MAX4466 -> ADC -> Audio -> event -> EmotionController
                                       ▼
                                   240x280 pixels
 
-Wi-Fi ───────────────────────> future HTTP/API layer
+Wi-Fi ───────────────────────> optional phone server (remote messages)
 MAX98357A <────────────────── speaker.py (I2S tones, software volume)
 ```
 
@@ -194,6 +194,20 @@ AI model = future intelligence
 
 Run the PC-side tests (no hardware needed) with `python -m unittest discover -s tests`.
 
+## Home server, VK notifications and iPhone BLE relay
+
+The Android server phone stays at home on home Wi-Fi. The owner sends a normal VK message from Pixel 9 to the spouse's private chat. The server watches only that configured dialog and sender ID, then emits a content-free `NEW_MESSAGE` event. It never forwards VK text or attachments.
+
+At home, ESP32-S3 receives the event over Wi-Fi. Away from home, the iPhone 14 Pro app can relay the event from the server over Tailscale and BLE. The robot displays an envelope until MODE is pressed. The separate web sender is retained only as a development endpoint for a later stage.
+
+See [server/README.md](server/README.md) and [ios/README.md](ios/README.md). Keep all tokens and `firmware/config_local.py` private. Do not expose port 8080 directly to the public internet. Direct ESP32 access through iPhone hotspot still needs a secure public HTTPS endpoint and TLS support; use BLE for the first away-from-home tests.
+
+## V1 delivery plan
+
+- **20 November 2026:** finish and verify this robot firmware/server/iPhone integration version.
+- **22 November 2026:** assemble the physical enclosure.
+- The release checklist and test sequence are in [docs/RELEASE_PLAN.md](docs/RELEASE_PLAN.md).
+
 ## Important V1 limitation
 
 The firmware is prepared for the selected architecture, but the audio thresholds and the MAX98357A speaker path have not yet been validated on the physical assembled robot. The first hardware session should therefore be a controlled bring-up rather than powering every module at once.
@@ -222,3 +236,14 @@ tests/
 ├── test_hardware.py        # audio, display, speaker, main loop (fake hardware)
 └── fakes.py                # PC stand-ins for machine / framebuf / SPI
 ```
+
+## Server, weather and iPhone relay (development branch)
+
+The integration branch `feature/phone-bridge-weather-vk` adds:
+- Android Termux Flask server with separate ESP32 and iPhone message queues.
+- Open-Meteo current weather endpoint and a short weather screen on the robot.
+- Optional VK watcher restricted to one configured `peer_id` and one sender `from_id`.
+- ESP32 BLE GATT peripheral and SwiftUI/CoreBluetooth iPhone companion source.
+- Ordered Wi-Fi failover for home router and, later, iPhone Personal Hotspot.
+
+Start with `server/README.md` and `ios/README.md`. Do not merge this branch into `main` or flash it as a verified release until the Python tests, MicroPython syntax checks, hardware BLE test, iOS build and real background-delivery test have passed. The iOS source cannot be compiled without an Xcode/macOS environment. iOS background refresh is opportunistic and not a guaranteed real-time message transport.

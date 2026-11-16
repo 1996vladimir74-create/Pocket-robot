@@ -172,5 +172,57 @@ class FaceRenderer:
         commands.extend(self._mouth(profile["mouth"], profile["open"], intensity))
         return commands
 
+    def message_screen(self):
+        """Draw a persistent envelope notification; never display message content."""
+        x0, x1 = self.cx - 72, self.cx + 72
+        y0, y1 = 86, 190
+        xm = self.cx
+        ym = 145
+        commands = [
+            self._command("fill_rect", x=0, y=0, width=self.width,
+                          height=self.height, color=self.BACKGROUND),
+            self._command("line", x1=x0, y1=y0, x2=x1, y2=y0,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("line", x1=x1, y1=y0, x2=x1, y2=y1,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("line", x1=x1, y1=y1, x2=x0, y2=y1,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("line", x1=x0, y1=y1, x2=x0, y2=y0,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("line", x1=x0, y1=y0, x2=xm, y2=ym,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("line", x1=x1, y1=y0, x2=xm, y2=ym,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("text", text="NEW MESSAGE", x=67, y=218,
+                          color=self.FACE_COLOR),
+            self._command("text", text="PRESS MODE", x=77, y=246,
+                          color=0x7BEF),
+        ]
+        return commands
+
+    def weather_screen(self, weather):
+        """Render current weather values supplied by the server."""
+        temp = weather.get("temperature_c")
+        feels = weather.get("feels_like_c")
+        wind = weather.get("wind_kmh")
+        humidity = weather.get("humidity_percent")
+        def fmt(value, suffix):
+            return "--" if value is None else "{}{}".format(round(value), suffix)
+        lines = [
+            "TEMP  " + fmt(temp, " C"),
+            "FEELS " + fmt(feels, " C"),
+            "WIND  " + fmt(wind, " km/h"),
+            "HUMID " + fmt(humidity, " %"),
+        ]
+        commands = [
+            self._command("fill_rect", x=0, y=0, width=self.width, height=self.height, color=self.BACKGROUND),
+            self._command("text", text="WEATHER", x=18, y=28, color=self.FACE_COLOR),
+            self._command("line", x1=12, y1=50, x2=self.width-12, y2=50, color=self.FACE_COLOR, thickness=2),
+        ]
+        for i, line in enumerate(lines):
+            commands.append(self._command("text", text=line, x=18, y=82+i*32, color=self.FACE_COLOR))
+        commands.append(self._command("text", text="OPEN-METEO", x=18, y=245, color=0x7BEF))
+        return commands
+
     def frame_count(self):
         return 80
