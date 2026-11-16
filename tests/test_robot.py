@@ -172,11 +172,13 @@ class TestFaceRenderer(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.face.render("happy", 1.1)
 
-    def test_message_screen_contains_ascii_text_commands(self):
-        commands = self.face.message_screen("Hello Pocket Robot!")
+    def test_message_screen_draws_envelope_without_message_content(self):
+        commands = self.face.message_screen()
+        lines = [item for item in commands if item["type"] == "line"]
         texts = [item["text"] for item in commands if item["type"] == "text"]
+        self.assertGreaterEqual(len(lines), 6)
         self.assertIn("NEW MESSAGE", texts)
-        self.assertIn("Hello Pocket Robot!", texts)
+        self.assertIn("PRESS MODE", texts)
 
 
 if __name__ == "__main__":
