@@ -1,7 +1,7 @@
 name: Pocket Robot checks
 on:
   push:
-    branches: [feature/phone-bridge-weather-vk]
+    branches: [feature/phone-bridge-weather-vk, feature/vk-envelope-notifications]
   pull_request:
     branches: [main]
 jobs:
