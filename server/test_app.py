@@ -8,6 +8,7 @@ if SERVER_DIR not in sys.path:
     sys.path.insert(0, SERVER_DIR)
 
 from app import create_app
+from integrations import VKDialogWatcher
 
 
 class ServerApiTests(unittest.TestCase):
@@ -102,6 +103,35 @@ class ServerApiTests(unittest.TestCase):
             json={"text": "   "},
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_robot_presence_selects_direct_transport(self):
+        status = self.client.get("/api/status").get_json()
+        self.assertFalse(status["robot_online"])
+        self.client.get(
+            "/api/robot/messages/next",
+            headers={"Authorization": "Bearer device-test-token"},
+        )
+        status = self.client.get("/api/status").get_json()
+        self.assertTrue(status["robot_online"])
+
+    def test_vk_watcher_emits_event_without_message_text(self):
+        state_file = os.path.join(self.tmp.name, "vk_state.json")
+        events = []
+        watcher = VKDialogWatcher(
+            token="test", peer_id=2000000123, from_id=42, version="5.199",
+            state_file=state_file, on_message=lambda: events.append("NEW_MESSAGE"),
+        )
+        responses = [
+            {"items": [{"id": 10, "peer_id": 2000000123, "from_id": 7, "text": "old"}]},
+            {"items": [
+                {"id": 12, "peer_id": 2000000123, "from_id": 99, "text": "other sender"},
+                {"id": 11, "peer_id": 2000000123, "from_id": 42, "text": "private text"},
+            ]},
+        ]
+        watcher._api = lambda method, params: responses.pop(0)
+        self.assertEqual(watcher.poll_once(), 0)
+        self.assertEqual(watcher.poll_once(), 1)
+        self.assertEqual(events, ["NEW_MESSAGE"])
 
 
 if __name__ == "__main__":
