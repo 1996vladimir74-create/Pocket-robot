@@ -1,27 +1,37 @@
-# Pocket Robot iOS companion — source code
+# Pocket Robot iPhone companion — source code
 
-This folder contains the SwiftUI/CoreBluetooth app source. It is not an App Store build and has not been compiled because an Xcode/macOS environment is unavailable.
+The iPhone 14 Pro app is a BLE relay between the permanent home Android server and the portable ESP32-S3 robot. This folder contains SwiftUI/CoreBluetooth source only. It is not a compiled installable app; building and signing requires Xcode on macOS.
 
-## Required Xcode target settings
-- iOS deployment target: 16.0 or later.
-- Add `PocketRobotApp.swift` to a new iOS App target.
-- Use the supplied `Info.plist` (or copy its keys into the target Info settings).
-- Enable Background Modes: Bluetooth LE accessory support / Uses Bluetooth LE accessories and Background fetch.
-- Set the bundle identifier to `com.pocketrobot.phone` or change `refreshID` and `BGTaskSchedulerPermittedIdentifiers` together.
-- Add an Apple Developer signing team to install on a physical iPhone.
+## Fixed role
 
-## Setup
-1. Install Tailscale on the Android server phone and iPhone, sign both into the same private tailnet.
-2. Start the Flask server on Android. Use its Tailscale IPv4 address as the server URL, for example `http://100.x.y.z:8080`.
-3. Copy `PHONE_TOKEN` from the private Android `server/config.py` into the app.
-4. Run the app, grant Bluetooth permission, and tap Connect.
-5. Keep the ESP32 powered and BLE advertising. The iPhone app scans for the Pocket Robot GATT service.
-6. Send a test message through the server web page. The app polls its independent queue, writes the text over BLE, and acknowledges it only after the BLE write succeeds.
+- Android server phone stays at home on home Wi-Fi.
+- Pixel 9 sends messages to the spouse through the existing VK private chat.
+- The home server watches only that configured dialog and sender ID.
+- The iPhone app reaches the home server over Tailscale and forwards a fixed `NEW_MESSAGE` event to the robot over BLE when the ESP32 is not recently online.
+- The app does not read VK, access message text, or relay the content of the conversation.
+- The robot displays an envelope until MODE is pressed.
 
-## Important delivery limitation
-Foreground polling runs every 12 seconds. iOS Background App Refresh is opportunistic: its schedule is controlled by iOS and is not a real-time polling guarantee. Core Bluetooth background mode and state restoration help maintain an established connection, but do not guarantee delivery after the app is force-quit, the phone reboots, Bluetooth is disabled, or iOS suspends background work. This must be tested on the actual iPhone 14 Pro / iOS 26.4.
+## Build and setup
 
-For reliable event-driven wake-up, a later release should add APNs push notifications. That requires an Apple Developer team, APNs key, server-side push provider configuration, and real-device testing. Do not treat this source-only build as a verified always-on service.
+1. Create a new iOS App target in Xcode, deployment target iOS 16.0 or later.
+2. Add `PocketRobotApp.swift` to the target and use the supplied `Info.plist` keys.
+3. Enable Background Modes for Bluetooth LE accessory support and Background fetch.
+4. Set bundle identifier to `com.pocketrobot.phone`, or update the refresh task identifier in both source and Info.plist.
+5. Add an Apple Developer signing team and install on iPhone 14 Pro.
+6. Install Tailscale on the home Android server phone and iPhone; sign both into the same private tailnet.
+7. Enter the Android phone's Tailscale IPv4 URL, e.g. `http://100.x.y.z:8080`, and the private `PHONE_TOKEN`.
+8. Enable Bluetooth, open the app and connect to Pocket Robot.
+
+## Relay behavior
+
+Before taking an item from the phone queue, the app checks `/api/status`. If the ESP32 has polled the server recently, the app does not relay the same event over BLE. If the robot is offline, the app leases the phone-queue event, sends only the fixed `NEW_MESSAGE` marker in BLE chunks, and acknowledges the server queue after all BLE writes complete.
+
+## Background limitation
+
+Foreground polling runs approximately every 12 seconds. iOS Background App Refresh is opportunistic and is not a real-time polling guarantee. Core Bluetooth background mode and state restoration help maintain an established connection but do not guarantee delivery after force-quit, reboot, Bluetooth disablement or suspension. This must be tested on the actual iPhone 14 Pro / iOS 26.4.
+
+A future APNs implementation could provide event-driven wake-up, but requires Apple Developer credentials, an APNs key, server-side push configuration and real-device testing. It is not included in this version.
 
 ## Network security
-The example uses HTTP to a Tailscale private address; traffic is carried inside the encrypted tailnet. Do not expose this server port to the public internet. The PHONE_TOKEN is a secret; do not put it in screenshots or commit a real token.
+
+The example uses HTTP to a Tailscale private address; traffic is carried inside the encrypted tailnet. Do not expose port 8080 directly to the public internet. The `PHONE_TOKEN` is secret and must not be committed or shown in screenshots.
