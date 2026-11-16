@@ -10,7 +10,7 @@ class WeatherClient:
         return {"temperature_c":c.get("temperature_2m"),"feels_like_c":c.get("apparent_temperature"),"humidity_percent":c.get("relative_humidity_2m"),"wind_kmh":c.get("wind_speed_10m"),"weather_code":c.get("weather_code"),"time":c.get("time"),"source":"Open-Meteo"}
 
 class VKDialogWatcher:
-    """Poll only one peer and forward only messages from the configured sender."""
+    """Poll one VK peer and emit a content-free event for the configured sender."""
     def __init__(self,token,peer_id,from_id,version,state_file,on_message):
         self.token=token; self.peer_id=int(peer_id); self.from_id=int(from_id); self.version=version
         self.state_file=state_file; self.on_message=on_message; self.last_id=self._load_state()
@@ -39,9 +39,11 @@ class VKDialogWatcher:
         count=0
         for item in sorted(fresh,key=lambda x:int(x.get("id",0))):
             mid=int(item.get("id",0))
-            if int(item.get("peer_id",0))==self.peer_id and int(item.get("from_id",0))==self.from_id:
-                text=str(item.get("text","")).strip()
-                if text: self.on_message(text[:240]); count+=1
+            if (int(item.get("peer_id", 0)) == self.peer_id
+                    and int(item.get("from_id", 0)) == self.from_id):
+                # Only a notification event is forwarded; no message content.
+                self.on_message()
+                count += 1
             self.last_id=max(self.last_id,mid)
         if fresh: self._save_state()
         return count
