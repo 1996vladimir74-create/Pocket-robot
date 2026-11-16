@@ -2,7 +2,8 @@
 import os, threading, time
 from flask import Flask, jsonify, request, Response
 from database import (init_db, enqueue_message, lease_next_message,
-    lease_next_phone_message, acknowledge_message, acknowledge_phone_message, list_messages)
+    lease_next_phone_message, acknowledge_message, acknowledge_phone_message,
+    list_messages, touch_robot, robot_is_online)
 from integrations import WeatherClient, VKDialogWatcher
 
 def create_app(test_config=None):
@@ -50,6 +51,7 @@ def create_app(test_config=None):
     @app.get("/api/robot/messages/next")
     def robot_next():
         if not authorized(app.config["DEVICE_TOKEN"]): return jsonify(error="unauthorized"),401
+        touch_robot(app.config["DATABASE"])
         return jsonify(message=lease_next_message(app.config["DATABASE"]))
 
     @app.post("/api/robot/messages/<int:mid>/ack")
@@ -85,8 +87,13 @@ def create_app(test_config=None):
 
     @app.get("/api/status")
     def status():
-        return jsonify(vk_enabled=bool(app.config["VK_ENABLED"] and app.config["VK_TOKEN"] and app.config["VK_PEER_ID"] and app.config["VK_FROM_ID"]),
-                       weather_configured=True, phone_relay=bool(app.config["PHONE_TOKEN"]))
+        return jsonify(
+            vk_enabled=bool(app.config["VK_ENABLED"] and app.config["VK_TOKEN"]
+                            and app.config["VK_PEER_ID"] and app.config["VK_FROM_ID"]),
+            weather_configured=True,
+            phone_relay=bool(app.config["PHONE_TOKEN"]),
+            robot_online=robot_is_online(app.config["DATABASE"]),
+        )
 
     # VK watcher is explicitly opt-in. It only requests history for one peer_id,
     # then accepts records whose from_id equals the configured sender.
@@ -96,7 +103,8 @@ def create_app(test_config=None):
             token=app.config["VK_TOKEN"], peer_id=int(app.config["VK_PEER_ID"]),
             from_id=int(app.config["VK_FROM_ID"]), version=app.config["VK_API_VERSION"],
             state_file=app.config["VK_STATE_FILE"],
-            on_message=lambda text: enqueue_message(app.config["DATABASE"],text))
+            # Never store or forward VK message text: only create a notification event.
+            on_message=lambda: enqueue_message(app.config["DATABASE"], "NEW_MESSAGE"))
         def watch_loop():
             while True:
                 try: watcher.poll_once()
