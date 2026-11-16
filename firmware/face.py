@@ -172,46 +172,33 @@ class FaceRenderer:
         commands.extend(self._mouth(profile["mouth"], profile["open"], intensity))
         return commands
 
-    def message_screen(self, message):
-        """Render a short ASCII notification using MicroPython's built-in font."""
-        translit = {
-            "А":"A","Б":"B","В":"V","Г":"G","Д":"D","Е":"E","Ё":"Yo","Ж":"Zh",
-            "З":"Z","И":"I","Й":"Y","К":"K","Л":"L","М":"M","Н":"N","О":"O",
-            "П":"P","Р":"R","С":"S","Т":"T","У":"U","Ф":"F","Х":"Kh","Ц":"Ts",
-            "Ч":"Ch","Ш":"Sh","Щ":"Shch","Ъ":"","Ы":"Y","Ь":"","Э":"E","Ю":"Yu","Я":"Ya",
-            "а":"a","б":"b","в":"v","г":"g","д":"d","е":"e","ё":"yo","ж":"zh",
-            "з":"z","и":"i","й":"y","к":"k","л":"l","м":"m","н":"n","о":"o",
-            "п":"p","р":"r","с":"s","т":"t","у":"u","ф":"f","х":"kh","ц":"ts",
-            "ч":"ch","ш":"sh","щ":"shch","ъ":"","ы":"y","ь":"","э":"e","ю":"yu","я":"ya",
-        }
-        raw = str(message).replace("\\n", " ")
-        text = "".join(translit.get(ch, ch) for ch in raw)
-        text = " ".join(text.encode("ascii", "replace").decode().split())[:120]
-        lines = []
-        while text and len(lines) < 5:
-            if len(text) <= 22:
-                lines.append(text)
-                break
-            cut = text.rfind(" ", 0, 23)
-            if cut < 1:
-                cut = 22
-            lines.append(text[:cut])
-            text = text[cut:].strip()
+    def message_screen(self):
+        """Draw a persistent envelope notification; never display message content."""
+        x0, x1 = self.cx - 72, self.cx + 72
+        y0, y1 = 86, 190
+        xm = self.cx
+        ym = 145
         commands = [
             self._command("fill_rect", x=0, y=0, width=self.width,
                           height=self.height, color=self.BACKGROUND),
-            self._command("line", x1=12, y1=12, x2=self.width - 12, y2=12,
-                          color=self.FACE_COLOR, thickness=2),
-            self._command("text", text="NEW MESSAGE", x=18, y=28,
+            self._command("line", x1=x0, y1=y0, x2=x1, y2=y0,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("line", x1=x1, y1=y0, x2=x1, y2=y1,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("line", x1=x1, y1=y1, x2=x0, y2=y1,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("line", x1=x0, y1=y1, x2=x0, y2=y0,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("line", x1=x0, y1=y0, x2=xm, y2=ym,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("line", x1=x1, y1=y0, x2=xm, y2=ym,
+                          color=self.FACE_COLOR, thickness=4),
+            self._command("text", text="NEW MESSAGE", x=67, y=218,
                           color=self.FACE_COLOR),
+            self._command("text", text="PRESS MODE", x=77, y=246,
+                          color=0x7BEF),
         ]
-        for i, line in enumerate(lines):
-            commands.append(self._command("text", text=line, x=12,
-                                          y=76 + i * 24, color=self.FACE_COLOR))
-        commands.append(self._command("text", text="POCKET ROBOT", x=18, y=245,
-                                      color=0x7BEF))
         return commands
-
 
     def weather_screen(self, weather):
         """Render current weather values supplied by the server."""
