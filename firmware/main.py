@@ -189,8 +189,8 @@ def main():
         if ble_bridge is not None and robot.message is None:
             try:
                 incoming_ble = ble_bridge.poll()
-                if incoming_ble:
-                    robot.set_message(incoming_ble)
+                if incoming_ble == "NEW_MESSAGE":
+                    robot.set_message("NEW_MESSAGE")
                     ctx["message_id"] = None
                     ctx["message_acked"] = False
                     ctx["message_until"] = None
@@ -225,7 +225,7 @@ def main():
             robot.set_state(status["state"])
 
             if robot.message is not None:
-                commands = face.message_screen(robot.message)
+                commands = face.message_screen()
             elif (ctx["weather"] is not None and ctx["weather_until"] is not None
                   and time.ticks_diff(now, ctx["weather_until"]) < 0):
                 commands = face.weather_screen(ctx["weather"])
@@ -277,7 +277,7 @@ def main():
                         try:
                             incoming = server_client.poll()
                             if incoming and incoming.get("id") is not None:
-                                robot.set_message(incoming.get("text", ""))
+                                robot.set_message("NEW_MESSAGE")
                                 ctx["message_id"] = incoming["id"]
                                 ctx["message_acked"] = False
                                 ctx["last_ack_attempt"] = None
