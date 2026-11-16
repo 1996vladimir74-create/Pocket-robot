@@ -117,6 +117,21 @@ final class PhoneBridge: NSObject, ObservableObject {
         isPolling = true
         defer { isPolling = false }
         do {
+            // Avoid a duplicate BLE alert while the ESP32 is polling directly.
+            var statusRequest = URLRequest(url: base.appending(path: "/api/status"))
+            statusRequest.httpMethod = "GET"
+            statusRequest.timeoutInterval = 8
+            let (statusData, statusResponse) = try await URLSession.shared.data(for: statusRequest)
+            guard (statusResponse as? HTTPURLResponse)?.statusCode == 200 else {
+                status = "Ошибка проверки статуса робота"
+                return
+            }
+            let serverStatus = try JSONDecoder().decode(ServerStatusResponse.self, from: statusData)
+            if serverStatus.robotOnline {
+                status = "Робот получает уведомления напрямую"
+                return
+            }
+
             var request = URLRequest(url: base.appending(path: "/api/phone/messages/next"))
             request.httpMethod = "GET"
             request.setValue("Bearer " + phoneToken, forHTTPHeaderField: "Authorization")
@@ -129,7 +144,7 @@ final class PhoneBridge: NSObject, ObservableObject {
             let envelope = try JSONDecoder().decode(PhoneQueueResponse.self, from: data)
             guard let message = envelope.message else { return }
             pendingMessageID = message.id
-            pendingText = message.text
+            pendingText = "NEW_MESSAGE"
             if robot == nil { scan() }
             sendPendingIfReady()
             status = "Получено сообщение: ожидаю BLE"
@@ -242,6 +257,12 @@ extension PhoneBridge: CBPeripheralDelegate {
     }
 }
 
+private struct ServerStatusResponse: Decodable {
+    let robotOnline: Bool
+    enum CodingKeys: String, CodingKey {
+        case robotOnline = "robot_online"
+    }
+}
 private struct PhoneQueueResponse: Decodable {
     let message: PhoneMessage?
 }
@@ -269,7 +290,7 @@ struct ContentView: View {
                 }
                 Section("Информация") {
                     Text("Оставьте приложение работающим. В фоне iOS может ограничивать периодические запросы; доставка не гарантируется при принудительном закрытии приложения.")
-                    Text("Для удалённой связи оба телефона должны быть подключены к одной частной VPN-сети, а сервер Android должен быть запущен.")
+                    Text("Для BLE-моста iPhone и домашний Android-сервер должны быть подключены к одной частной VPN-сети. Если робот доступен серверу напрямую, приложение не дублирует уведомления по BLE.")
                 }
             }
             .navigationTitle("Pocket Robot")
