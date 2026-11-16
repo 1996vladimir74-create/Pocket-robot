@@ -186,17 +186,20 @@ def main():
                 _report("Buttons", exc)
 
         # 1b. iPhone -> BLE notification. MODE dismisses it.
-        if ble_bridge is not None and robot.message is None:
+        if ble_bridge is not None:
             try:
                 incoming_ble = ble_bridge.poll()
                 if incoming_ble == "NEW_MESSAGE":
-                    robot.set_message("NEW_MESSAGE")
-                    ctx["message_id"] = None
-                    ctx["message_acked"] = False
-                    ctx["message_until"] = None
-                    ctx["weather_until"] = None
-                    emotions.handle_event("message_received", now)
-                    print("BLE message received")
+                    # Consume every BLE event so the phone can acknowledge it.
+                    # An already-visible envelope represents additional messages too.
+                    if robot.message is None:
+                        robot.set_message("NEW_MESSAGE")
+                        ctx["message_id"] = None
+                        ctx["message_acked"] = False
+                        ctx["message_until"] = None
+                        ctx["weather_until"] = None
+                        emotions.handle_event("message_received", now)
+                    print("BLE notification event received")
             except Exception as exc:
                 _report("BLE receive", exc)
 
