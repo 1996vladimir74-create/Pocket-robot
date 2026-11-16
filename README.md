@@ -194,11 +194,19 @@ AI model = future intelligence
 
 Run the PC-side tests (no hardware needed) with `python -m unittest discover -s tests`.
 
-## Phone-hosted message server (prototype)
+## Home server, VK notifications and iPhone BLE relay
 
-The repository now includes a small Flask + SQLite server in `server/`. It can run on an Android phone in Termux, accept a message from its web page, and deliver it to the ESP32-S3 over the same Wi-Fi network. The robot polls every 15 seconds, displays an ASCII notification, then acknowledges it.
+The Android server phone stays at home on home Wi-Fi. The owner sends a normal VK message from Pixel 9 to the spouse's private chat. The server watches only that configured dialog and sender ID, then emits a content-free `NEW_MESSAGE` event. It never forwards VK text or attachments.
 
-Follow [server/README.md](server/README.md) for setup. Keep `server/config.py` and `firmware/config_local.py` private. The first version uses local HTTP only: do not expose port 8080 to the public internet. VK integration, weather, and HTTPS remote access are future stages.
+At home, ESP32-S3 receives the event over Wi-Fi. Away from home, the iPhone 14 Pro app can relay the event from the server over Tailscale and BLE. The robot displays an envelope until MODE is pressed. The separate web sender is retained only as a development endpoint for a later stage.
+
+See [server/README.md](server/README.md) and [ios/README.md](ios/README.md). Keep all tokens and `firmware/config_local.py` private. Do not expose port 8080 directly to the public internet. Direct ESP32 access through iPhone hotspot still needs a secure public HTTPS endpoint and TLS support; use BLE for the first away-from-home tests.
+
+## V1 delivery plan
+
+- **20 November 2026:** finish and verify this robot firmware/server/iPhone integration version.
+- **22 November 2026:** assemble the physical enclosure.
+- The release checklist and test sequence are in [docs/RELEASE_PLAN.md](docs/RELEASE_PLAN.md).
 
 ## Important V1 limitation
 
