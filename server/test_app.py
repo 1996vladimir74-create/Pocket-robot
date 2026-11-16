@@ -125,7 +125,7 @@ class ServerApiTests(unittest.TestCase):
             {"items": [{"id": 10, "peer_id": 2000000123, "from_id": 7, "text": "old"}]},
             {"items": [
                 {"id": 12, "peer_id": 2000000123, "from_id": 99, "text": "other sender"},
-                {"id": 11, "peer_id": 2000000123, "from_id": 42, "text": "private text"},
+                {"id": 11, "peer_id": 2000000123, "from_id": 42, "attachments": [{"type": "photo"}]},
             ]},
         ]
         watcher._api = lambda method, params: responses.pop(0)
