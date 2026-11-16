@@ -100,12 +100,17 @@ def _ack(path, table, message_id):
 
 
 def acknowledge_message(path, message_id):
-    return _ack(path, "messages", message_id)
+    # Both queue rows represent the same logical event and share the same ID.
+    robot_ok = _ack(path, "messages", message_id)
+    _ack(path, "phone_messages", message_id)
+    return robot_ok
 
 
 def acknowledge_phone_message(path, message_id):
-    return _ack(path, "phone_messages", message_id)
-
+    # A successful BLE relay must also retire the direct-Wi-Fi copy.
+    phone_ok = _ack(path, "phone_messages", message_id)
+    _ack(path, "messages", message_id)
+    return phone_ok
 
 def list_messages(path, limit=20):
     with _connect(path) as conn:
